@@ -62,6 +62,13 @@ let listaDonantesVisible = false;
 let conteoDonacionesHist = 0;
 let conteoCampanas = 0;
 
+function obtenerInsigniaPorTotal(total) {
+  const n = Number(total || 0);
+  if (n >= 5) return "Nivel 5+ Donaciones (Héroe)";
+  if (n === 1) return "Primera Donación";
+  return "Donante Activo";
+}
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
@@ -114,7 +121,8 @@ async function registrarAuditoria(tipoMovimiento, grupo, cambioUnidades, detalle
     tipo_movimiento: tipoMovimiento,
     grupo_sanguineo: grupo,
     cambio_unidades: cambioUnidades,
-    detalle: `${detalle} · Por: ${actor}`
+    detalle: `${detalle} · Por: ${actor}`,
+    activo: true
   }]);
 }
 
@@ -122,7 +130,8 @@ async function cargarStock() {
   const { data, error } = await db
     .from("stock_sangre")
     .select("*")
-    .order("id", { ascending: false });
+    .eq("activo", true)
+    .order("id", { ascending: true });
 
   if (error) {
     mostrarMensaje("msgStock", "Error al leer stock: " + error.message, "error");
@@ -146,14 +155,14 @@ async function cargarStock() {
     tablaStock.innerHTML = `
       <tr>
         <td colspan="5" style="text-align:center; color:#64748b; padding:2rem;">
-          No hay registros de stock para el filtro seleccionado.
+          No hay registros activos de stock para el filtro seleccionado.
         </td>
       </tr>
     `;
     return;
   }
 
-  filtrados.forEach((item) => {
+  filtrados.forEach((item, idx) => {
     const mensajeWa = encodeURIComponent(
       `URGENTE - Cadena de donantes: Se necesita sangre grupo ${item.grupo_sanguineo} en ${item.centro_nombre} (${item.ciudad_o_zona}). Unidades actuales: ${item.unidades}. Si no puedes donar, reenvía este mensaje.`
     );
@@ -163,15 +172,15 @@ async function cargarStock() {
 
     const botonEliminar = puedeEliminarStock
       ? `<button type="button" class="peligro" onclick="eliminarStock(${item.id})">
-           <i class="bi bi-trash3-fill"></i> Eliminar
+           <i class="bi bi-trash3-fill"></i> Dar de baja
          </button>`
       : `<button type="button" class="peligro" style="opacity:0.6;" title="Solo Administrador de Red" onclick="avisoSinPermisoEliminar()">
-           <i class="bi bi-lock-fill"></i> Eliminar
+           <i class="bi bi-lock-fill"></i> Dar de baja
          </button>`;
 
     const fila = document.createElement("tr");
     fila.innerHTML = `
-      <td><strong>${item.centro_nombre}</strong></td>
+      <td><span class="contador-pill">#${idx + 1}</span> <strong>${item.centro_nombre}</strong></td>
       <td>${item.ciudad_o_zona}${item.campana_activa ? " · <span style='color:#be123c;font-weight:600;'>" + item.campana_activa + "</span>" : ""}</td>
       <td><span class="badge">${item.grupo_sanguineo}</span></td>
       <td>
@@ -201,7 +210,7 @@ async function cargarStock() {
 window.avisoSinPermisoEliminar = function avisoSinPermisoEliminar() {
   mostrarMensaje(
     "msgStock",
-    `Tu rol actual (${rolActual}) no puede eliminar registros de stock. Solo Administrador de Red puede eliminar.`
+    `Tu rol actual (${rolActual}) no puede dar de baja registros de stock. Solo Administrador de Red puede realizar esta acción.`
   );
 };
 
@@ -211,7 +220,8 @@ window.cargarDonantes = async function cargarDonantes(forzarRender = false) {
   const { data, error } = await db
     .from("donantes")
     .select("*")
-    .order("id", { ascending: false });
+    .eq("activo", true)
+    .order("id", { ascending: true });
 
   if (error) {
     mostrarMensaje("msgDonante", "Error al cargar donantes: " + error.message, "error");
@@ -232,22 +242,23 @@ window.cargarDonantes = async function cargarDonantes(forzarRender = false) {
     tablaDonantes.innerHTML = `
       <tr>
         <td colspan="5" style="text-align:center; color:#64748b; padding:1.5rem;">
-          Todavía no hay donantes registrados.
+          Todavía no hay donantes activos registrados.
         </td>
       </tr>
     `;
     return;
   }
 
-  registros.forEach((donante) => {
+  registros.forEach((donante, idx) => {
+    const insigniaMostrar = obtenerInsigniaPorTotal(donante.total_donaciones);
     const fila = document.createElement("tr");
     fila.innerHTML = `
-      <td><strong>#${donante.id}</strong> · ${donante.nombre_completo}</td>
+      <td><strong>#${idx + 1}</strong> · ${donante.nombre_completo}</td>
       <td><span class="badge">${donante.grupo_sanguineo}</span></td>
       <td>${donante.telefono_whatsapp}</td>
       <td>
         <strong>${donante.total_donaciones}</strong> don.
-        <div><span class="insignia-tag">${donante.insignia || "Donante Activo"}</span></div>
+        <div><span class="insignia-tag">${insigniaMostrar}</span></div>
       </td>
       <td class="nowrap-col">${donante.proxima_fecha_disponible || "-"}</td>
     `;
@@ -293,7 +304,8 @@ formStock.addEventListener("submit", async (e) => {
     ciudad_o_zona: zona,
     grupo_sanguineo: grupo,
     unidades,
-    campana_activa: campana || null
+    campana_activa: campana || null,
+    activo: true
   };
 
   let respuesta;
@@ -354,25 +366,32 @@ function resetearFormularioStock() {
   document.getElementById("btnCancelarEdicion").style.display = "none";
 }
 
+// Eliminación lógica: marca activo = false sin borrar físicamente el registro
 window.eliminarStock = async function eliminarStock(id) {
   if (!puedeEliminarStock) {
     avisoSinPermisoEliminar();
     return;
   }
-  if (!confirm("¿Eliminar este registro de stock?")) return;
+  if (!confirm("¿Dar de baja lógicamente este registro de stock?")) return;
   const item = stockActual.find((r) => Number(r.id) === Number(id));
-  const { error } = await db.from("stock_sangre").delete().eq("id", id);
+
+  const { error } = await db
+    .from("stock_sangre")
+    .update({ activo: false })
+    .eq("id", id);
+
   if (error) {
-    mostrarMensaje("msgStock", "Error al eliminar: " + error.message);
+    mostrarMensaje("msgStock", "Error al dar de baja: " + error.message);
     return;
   }
+
   await registrarAuditoria(
-    "ELIMINACION_STOCK",
+    "BAJA_LOGICA_STOCK",
     item ? item.grupo_sanguineo : "N/A",
     0,
-    `Eliminó registro de stock ID #${id}${item ? " (" + item.centro_nombre + ")" : ""}`
+    `Baja lógica de registro ID #${id}${item ? " (" + item.centro_nombre + ")" : ""}`
   );
-  mostrarMensaje("msgStock", "Registro eliminado.", "ok");
+  mostrarMensaje("msgStock", "Registro dado de baja lógicamente.", "ok");
   cargarStock();
 };
 
@@ -381,6 +400,7 @@ async function incrementarStockPorGrupo(grupo) {
     .from("stock_sangre")
     .select("*")
     .eq("grupo_sanguineo", grupo)
+    .eq("activo", true)
     .order("id", { ascending: false })
     .limit(1);
 
@@ -413,7 +433,8 @@ async function incrementarStockPorGrupo(grupo) {
       ciudad_o_zona: "Zona Central",
       grupo_sanguineo: grupo,
       unidades: 1,
-      campana_activa: "Donación Directa"
+      campana_activa: "Donación Directa",
+      activo: true
     }])
     .select()
     .single();
@@ -437,11 +458,7 @@ formDonante.addEventListener("submit", async (e) => {
   const proxima = new Date(hoy);
   proxima.setDate(proxima.getDate() + 90);
 
-  const insignia =
-    totalDonaciones >= 5 ? "Nivel 5+ Donaciones (Héroe)" :
-    totalDonaciones === 1 ? "Primera Donación" :
-    "Donante Activo";
-
+  const insignia = obtenerInsigniaPorTotal(totalDonaciones);
   const ultimaStr = hoy.toISOString().split("T")[0];
   const proximaStr = proxima.toISOString().split("T")[0];
 
@@ -454,7 +471,8 @@ formDonante.addEventListener("submit", async (e) => {
       total_donaciones: totalDonaciones,
       ultima_donacion: ultimaStr,
       proxima_fecha_disponible: proximaStr,
-      insignia
+      insignia,
+      activo: true
     }])
     .select()
     .single();
@@ -474,7 +492,8 @@ formDonante.addEventListener("submit", async (e) => {
       grupo_sanguineo: grupo,
       unidades_aportadas: 1,
       centro_destino: stockAct.centro_nombre,
-      fecha_donacion: ultimaStr
+      fecha_donacion: ultimaStr,
+      activo: true
     }]);
 
     await registrarAuditoria(
@@ -500,7 +519,7 @@ formDonante.addEventListener("submit", async (e) => {
   document.getElementById("carnetResultado").innerHTML = `
     <strong>Carnet Digital #${data.id}</strong> — ${data.nombre_completo}<br/>
     Grupo: <span class="badge">${data.grupo_sanguineo}</span> · Total: <strong>${data.total_donaciones}</strong><br/>
-    Insignia: <strong>${data.insignia}</strong><br/>
+    Insignia: <strong>${insignia}</strong><br/>
     Próxima fecha disponible: <strong>${data.proxima_fecha_disponible}</strong>
   `;
 
@@ -519,6 +538,7 @@ async function cargarSolicitudes() {
   const { data, error } = await db
     .from("solicitudes_urgentes")
     .select("*")
+    .eq("activo", true)
     .order("id", { ascending: false });
 
   if (error) return;
@@ -529,7 +549,7 @@ async function cargarSolicitudes() {
 
   tablaSolicitudes.innerHTML = "";
   if (rows.length === 0) {
-    tablaSolicitudes.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem;">Sin solicitudes registradas.</td></tr>`;
+    tablaSolicitudes.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem;">Sin solicitudes activas registradas.</td></tr>`;
     return;
   }
 
@@ -570,7 +590,8 @@ formSolicitudUrgente.addEventListener("submit", async (e) => {
     zona,
     grupo_sanguineo: grupo,
     unidades_requeridas: unidades,
-    estado: "Abierta"
+    estado: "Abierta",
+    activo: true
   }]);
 
   if (error) {
@@ -595,6 +616,7 @@ async function cargarDonacionesHistorial() {
   const { data, error } = await db
     .from("donaciones")
     .select("*")
+    .eq("activo", true)
     .order("id", { ascending: false });
 
   if (error) return;
@@ -604,7 +626,7 @@ async function cargarDonacionesHistorial() {
 
   tablaDonacionesHist.innerHTML = "";
   if (rows.length === 0) {
-    tablaDonacionesHist.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem;">Sin donaciones en historial.</td></tr>`;
+    tablaDonacionesHist.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1.5rem;">Sin donaciones activas en historial.</td></tr>`;
     return;
   }
 
@@ -625,6 +647,7 @@ async function cargarCampanas() {
   const { data, error } = await db
     .from("campanas_donacion")
     .select("*")
+    .eq("activo", true)
     .order("id", { ascending: false });
 
   if (error) return;
@@ -634,7 +657,7 @@ async function cargarCampanas() {
 
   tablaCampanas.innerHTML = "";
   if (rows.length === 0) {
-    tablaCampanas.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin campañas creadas.</td></tr>`;
+    tablaCampanas.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin campañas activas creadas.</td></tr>`;
     return;
   }
 
@@ -668,7 +691,8 @@ formCampana.addEventListener("submit", async (e) => {
     titulo,
     zona_sede: zona,
     meta_unidades: meta,
-    estado: "Activa"
+    estado: "Activa",
+    activo: true
   }]);
 
   if (error) {
@@ -685,6 +709,7 @@ async function cargarAuditoria() {
   const { data, error } = await db
     .from("auditoria_movimientos")
     .select("*")
+    .eq("activo", true)
     .order("id", { ascending: false })
     .limit(25);
 
@@ -693,7 +718,7 @@ async function cargarAuditoria() {
   tablaAuditoria.innerHTML = "";
 
   if (rows.length === 0) {
-    tablaAuditoria.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin movimientos registrados aún.</td></tr>`;
+    tablaAuditoria.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin movimientos activos registrados aún.</td></tr>`;
     return;
   }
 
@@ -713,23 +738,24 @@ async function cargarPersonal() {
   const { data, error } = await db
     .from("personal_acceso")
     .select("*")
-    .order("id", { ascending: false })
-    .limit(15);
+    .eq("activo", true)
+    .order("id", { ascending: true })
+    .limit(20);
 
   if (error) return;
   const rows = Array.isArray(data) ? data : [];
   tablaPersonal.innerHTML = "";
 
   if (rows.length === 0) {
-    tablaPersonal.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin personal registrado.</td></tr>`;
+    tablaPersonal.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">Sin personal activo registrado.</td></tr>`;
     return;
   }
 
-  rows.forEach((p) => {
+  rows.forEach((p, idx) => {
     const fechaFmt = p.ultimo_acceso ? new Date(p.ultimo_acceso).toLocaleString() : "-";
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${p.nombre_completo}</strong></td>
+      <td><strong>#${idx + 1}</strong> · ${p.nombre_completo}</td>
       <td>${p.correo}</td>
       <td><span class="insignia-tag">${p.rol}</span></td>
       <td class="nowrap-col">${fechaFmt}</td>
