@@ -3,6 +3,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_yFgwE7iPDgZbtAI-NY7gVA_YoxE1Bf7";
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SESSION_KEY = "hemocloud_sesion_activa";
+const LOCAL_ACCOUNTS_KEY = "hemocloud_cuentas_demo";
 
 function mostrarAlerta(id, texto, tipo = "error") {
   const el = document.getElementById(id);
@@ -12,18 +13,72 @@ function mostrarAlerta(id, texto, tipo = "error") {
   el.style.display = "flex";
 }
 
-// Formulario de registro (registro.html)
+function leerCuentasLocales() {
+  try {
+    const raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function guardarCuentaLocal({ nombre, rol, correo, clave, authUserId = null }) {
+  const cuentas = leerCuentasLocales().filter(
+    (c) => String(c.correo || "").toLowerCase() !== correo.toLowerCase()
+  );
+  cuentas.push({
+    nombre,
+    rol,
+    correo: correo.toLowerCase(),
+    clave,
+    authUserId
+  });
+  localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(cuentas));
+}
+
+async function sincronizarPerfilYEntrar({ nombre, correo, rol }) {
+  const { data: perfil } = await db
+    .from("personal_acceso")
+    .upsert([{
+      nombre_completo: nombre,
+      correo: correo.toLowerCase(),
+      rol,
+      ultimo_acceso: new Date().toISOString()
+    }], { onConflict: "correo" })
+    .select()
+    .single();
+
+  sessionStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({
+      nombre: perfil?.nombre_completo || nombre,
+      correo: correo.toLowerCase(),
+      rol: perfil?.rol || rol
+    })
+  );
+
+  window.location.href = "index.html";
+}
+
+// ==================== REGISTRO (registro.html) ====================
 const formRegistro = document.getElementById("formRegistro");
 if (formRegistro) {
   formRegistro.addEventListener("submit", async (e) => {
     e.preventDefault();
+
     const nombre = document.getElementById("regNombre").value.trim();
     const rol = document.getElementById("regRol").value;
     const correo = document.getElementById("regCorreo").value.trim().toLowerCase();
     const clave = document.getElementById("regClave").value;
 
-    if (nombre.length < 3 || clave.length < 6) {
-      mostrarAlerta("msgRegistro", "Ingresa un nombre válido y contraseña de al menos 6 caracteres.");
+    if (nombre.length < 3) {
+      mostrarAlerta("msgRegistro", "Ingresa un nombre válido de al menos 3 caracteres.");
+      return;
+    }
+
+    if (clave.length < 6) {
+      mostrarAlerta("msgRegistro", "La contraseña debe tener al menos 6 caracteres.");
       return;
     }
 
@@ -31,7 +86,12 @@ if (formRegistro) {
     const { data: authData, error: authError } = await db.auth.signUp({
       email: correo,
       password: clave,
-      options: { data: { nombre_completo: nombre, rol } }
+      options: {
+        data: {
+          nombre_completo: nombre,
+          rol
+        }
+      }
     });
 
     const msgAuth = (authError?.message || "").toLowerCase();
@@ -57,39 +117,38 @@ if (formRegistro) {
       }], { onConflict: "correo" });
 
     if (tablaError) {
-      mostrarAlerta("msgRegistro", "Error al guardar perfil: " + tablaError.message);
+      mostrarAlerta("msgRegistro", "Error al guardar perfil en base de datos: " + tablaError.message);
       return;
     }
 
-    const cuentasLocales = JSON.parse(localStorage.getItem("hemocloud_cuentas_demo") || "[]");
-    const sinDuplicado = cuentasLocales.filter((c) => c.correo.toLowerCase() !== correo);
-    sinDuplicado.push({ nombre, rol, correo, clave, authUserId });
-    localStorage.setItem("hemocloud_cuentas_demo", JSON.stringify(sinDuplicado));
+    guardarCuentaLocal({ nombre, rol, correo, clave, authUserId });
 
     const nota = esRateLimit
-      ? " (límite de correos de Auth alcanzado; cuenta habilitada para iniciar sesión)"
+      ? " (se alcanzó el límite temporal de correos de Auth, pero tu acceso quedó guardado)"
       : "";
 
     mostrarAlerta(
       "msgRegistro",
-      `Cuenta creada correctamente${nota}. Redirigiendo a Iniciar Sesión...`,
+      `Cuenta registrada correctamente${nota}. Redirigiendo a Iniciar Sesión...`,
       "ok"
     );
+
     setTimeout(() => {
       window.location.href = "login.html";
     }, 1100);
   });
 }
 
-// Formulario de login (login.html)
+// ==================== INICIO DE SESIÓN (login.html) ====================
 const formLogin = document.getElementById("formLogin");
 if (formLogin) {
   formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
+
     const correo = document.getElementById("loginCorreo").value.trim().toLowerCase();
     const clave = document.getElementById("loginClave").value;
 
-    let nombreUsuario = correo.split("@")[0];
+    let nombreUsuario = correo.split("@")[0] || "Operador";
     let rolUsuario = "Coordinador de Banco de Sangre";
     let autenticado = false;
 
@@ -103,45 +162,31 @@ if (formLogin) {
       nombreUsuario = signData.user.user_metadata?.nombre_completo || nombreUsuario;
       rolUsuario = signData.user.user_metadata?.rol || rolUsuario;
     } else {
-      const cuentasLocales = JSON.parse(localStorage.getItem("hemocloud_cuentas_demo") || "[]");
+      const cuentasLocales = leerCuentasLocales();
       const encontrada = cuentasLocales.find(
-        (c) => c.correo.toLowerCase() === correo && c.clave === clave
+        (c) => String(c.correo || "").toLowerCase() === correo && c.clave === clave
       );
+
       if (encontrada) {
         autenticado = true;
-        nombreUsuario = encontrada.nombre;
-        rolUsuario = encontrada.rol;
+        nombreUsuario = encontrada.nombre || nombreUsuario;
+        rolUsuario = encontrada.rol || rolUsuario;
       }
     }
 
     if (!autenticado) {
+      const detalleError = signError?.message ? ` (${signError.message})` : "";
       mostrarAlerta(
         "msgLogin",
-        "Correo o contraseña incorrectos. Si aún no tienes cuenta, haz clic en 'Crear cuenta nueva'."
+        `No se pudo iniciar sesión${detalleError}. Verifica tu correo y contraseña o revisa si en Supabase Auth está activa la confirmación de correo.`
       );
       return;
     }
 
-    const { data: perfil } = await db
-      .from("personal_acceso")
-      .upsert([{
-        nombre_completo: nombreUsuario,
-        correo,
-        rol: rolUsuario,
-        ultimo_acceso: new Date().toISOString()
-      }], { onConflict: "correo" })
-      .select()
-      .single();
-
-    sessionStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        nombre: perfil?.nombre_completo || nombreUsuario,
-        correo,
-        rol: perfil?.rol || rolUsuario
-      })
-    );
-
-    window.location.href = "index.html";
+    await sincronizarPerfilYEntrar({
+      nombre: nombreUsuario,
+      correo,
+      rol: rolUsuario
+    });
   });
 }
