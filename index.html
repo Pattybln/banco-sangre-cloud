@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HemoCloud · Banco de Sangre Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-canvas" aria-hidden="true"></div>
+
+  <header class="hero-header">
+    <div class="hero-inner">
+      <div class="hero-top">
+        <div class="brand">
+          <div class="brand-logo">
+            <i class="bi bi-droplet-fill"></i>
+          </div>
+          <div>
+            <span class="eyebrow">RED HOSPITALARIA Y DONANTES · BASE DE DATOS II</span>
+            <h1>HemoCloud · Banco de Sangre</h1>
+            <p class="hero-desc">Gestión de unidades sanguíneas, donantes con carnet QR, urgencias médicas y campañas.</p>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div class="cloud-badge">
+            <span class="live-dot"></span>
+            <span id="usuarioActivoLabel">Sesión Activa</span>
+          </div>
+          <button type="button" id="btnCerrarSesion" class="btn-logout">
+            <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+          </button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-red"><i class="bi bi-hospital-fill"></i></div>
+          <div>
+            <span class="kpi-label">Centros / Registros</span>
+            <span class="kpi-value" id="statCentros">0</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-blue"><i class="bi bi-droplet-half"></i></div>
+          <div>
+            <span class="kpi-label">Unidades en Stock</span>
+            <span class="kpi-value" id="statUnidades">0 unid.</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-amber"><i class="bi bi-exclamation-triangle-fill"></i></div>
+          <div>
+            <span class="kpi-label">Urgencias Abiertas</span>
+            <span class="kpi-value" id="statSolicitudes">0</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-green"><i class="bi bi-calendar-check-fill"></i></div>
+          <div>
+            <span class="kpi-label">Donaciones / Campañas</span>
+            <span class="kpi-value" id="statDonacionesCount">0 / 0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-layout">
+    <aside class="sidebar-col">
+      <!-- PASO 1: REGISTRAR / EDITAR STOCK -->
+      <section class="glass-card accent-top-red">
+        <div class="card-head">
+          <div class="card-title-wrap">
+            <span class="step-pill">PASO 1</span>
+            <div>
+              <h2 id="tituloFormStock"><i class="bi bi-hospital-fill"></i> Inventario por Centro</h2>
+              <p class="card-subtitle">Registra o actualiza cuántas unidades hay por grupo sanguíneo.</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="formStock">
+          <input type="hidden" id="stockId" />
+          <div class="stack-fields">
+            <div class="field">
+              <label for="centroNombre"><i class="bi bi-building"></i> Hospital o banco de sangre</label>
+              <input type="text" id="centroNombre" placeholder="Ej. Hospital General" required />
+            </div>
+            <div class="field">
+              <label for="zona"><i class="bi bi-geo-alt-fill"></i> Zona o sede</label>
+              <input type="text" id="zona" placeholder="Ej. Miraflores" required />
+            </div>
+            <div class="two-cols">
+              <div class="field">
+                <label for="grupoStock"><i class="bi bi-droplet"></i> Grupo sanguíneo</label>
+                <select id="grupoStock" required>
+                  <option value="">Elegir</option>
+                  <option value="O-">O-</option>
+                  <option value="O+">O+</option>
+                  <option value="A-">A-</option>
+                  <option value="A+">A+</option>
+                  <option value="B-">B-</option>
+                  <option value="B+">B+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="AB+">AB+</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="unidades"><i class="bi bi-stack"></i> Unidades</label>
+                <input type="number" id="unidades" min="0" placeholder="0" required />
+              </div>
+            </div>
+            <div class="field">
+              <label for="campana"><i class="bi bi-megaphone-fill"></i> Campaña vinculada (opcional)</label>
+              <input type="text" id="campana" placeholder="Ej. Campaña Solidaria" />
+            </div>
+          </div>
+
+          <div class="btn-group">
+            <button type="submit" id="btnGuardarStock" class="full-btn">
+              <i class="bi bi-cloud-upload-fill"></i> Guardar Stock
+            </button>
+            <button type="button" id="btnCancelarEdicion" class="secundario" style="display: none;">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- PASO 2: REGISTRAR DONANTE + CARNET QR -->
+      <section class="glass-card accent-top-dark">
+        <div class="card-head">
+          <div class="card-title-wrap">
+            <span class="step-pill dark">PASO 2</span>
+            <div>
+              <h2><i class="bi bi-person-badge-fill"></i> Nuevo Donante y Carnet QR</h2>
+              <p class="card-subtitle">Suma +1 unidad al grupo y genera su carnet con código QR.</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="formDonante">
+          <div class="stack-fields">
+            <div class="field">
+              <label for="nombreDonante"><i class="bi bi-person-fill"></i> Nombre completo</label>
+              <input type="text" id="nombreDonante" placeholder="Ej. Laura López" required />
+            </div>
+            <div class="two-cols">
+              <div class="field">
+                <label for="grupoDonante"><i class="bi bi-droplet-fill"></i> Grupo</label>
+                <select id="grupoDonante" required>
+                  <option value="">Grupo</option>
+                  <option value="O-">O-</option>
+                  <option value="O+">O+</option>
+                  <option value="A-">A-</option>
+                  <option value="A+">A+</option>
+                  <option value="B-">B-</option>
+                  <option value="B+">B+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="AB+">AB+</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="donacionesPrevias"><i class="bi bi-award-fill"></i> N.º donaciones</label>
+                <input type="number" id="donacionesPrevias" min="1" value="1" required />
+              </div>
+            </div>
+            <div class="field">
+              <label for="telDonante"><i class="bi bi-whatsapp"></i> Teléfono WhatsApp</label>
+              <input type="text" id="telDonante" placeholder="Ej. 59170000000" required />
+            </div>
+          </div>
+
+          <button type="submit" class="full-btn">
+            <i class="bi bi-qr-code-scan"></i> Guardar Donante (+1 Stock)
+          </button>
+        </form>
+
+        <div class="id-card-preview">
+          <div class="id-card-header">
+            <span>CARNET DIGITAL DE DONANTE</span>
+            <span>HEMOCLOUD</span>
+          </div>
+          <div class="id-card-body">
+            <div id="carnetResultado"></div>
+            <div id="qrBox"></div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- PANEL PRINCIPAL CON PESTAÑAS -->
+    <section class="glass-card accent-top-red">
+      <div class="card-head">
+        <div class="card-title-wrap">
+          <span class="step-pill">PANEL</span>
+          <div>
+            <h2><i class="bi bi-clipboard2-pulse-fill"></i> Centro Operativo</h2>
+            <p class="card-subtitle">Revisa el stock disponible, donantes, solicitudes urgentes, campañas y personal.</p>
+          </div>
+        </div>
+      </div>
+
+      <nav class="tabs-nav" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="tab-stock">
+          <i class="bi bi-droplet-half"></i> Stock y Donantes
+        </button>
+        <button type="button" class="tab-btn" data-tab="tab-urgentes">
+          <i class="bi bi-bell-fill"></i> Urgencias
+        </button>
+        <button type="button" class="tab-btn" data-tab="tab-historial">
+          <i class="bi bi-journal-check"></i> Donaciones y Campañas
+        </button>
+        <button type="button" class="tab-btn" data-tab="tab-auditoria">
+          <i class="bi bi-shield-check"></i> Auditoría y Personal
+        </button>
+      </nav>
+
+      <!-- PESTAÑA 1: STOCK ACTUAL + LISTA DE DONANTES -->
+      <div id="tab-stock" class="tab-panel active">
+        <div class="section-intro">
+          <strong>Stock disponible en centros</strong>
+          <span>Filtra por grupo sanguíneo, edita unidades o comparte una alerta por WhatsApp.</span>
+        </div>
+
+        <div class="filter-bar">
+          <div class="select-icon-wrap">
+            <i class="bi bi-funnel-fill"></i>
+            <select id="filtroGrupo">
+              <option value="TODOS">Todos los grupos sanguíneos</option>
+              <option value="O-">O-</option>
+              <option value="O+">O+</option>
+              <option value="A-">A-</option>
+              <option value="A+">A+</option>
+              <option value="B-">B-</option>
+              <option value="B+">B+</option>
+              <option value="AB-">AB-</option>
+              <option value="AB+">AB+</option>
+            </select>
+          </div>
+          <button type="button" class="secundario" onclick="cargarStock()">
+            <i class="bi bi-arrow-clockwise"></i> Actualizar
+          </button>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Centro</th>
+                <th>Zona / Campaña</th>
+                <th>Grupo</th>
+                <th>Unidades</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaStock"></tbody>
+          </table>
+        </div>
+
+        <div class="donantes-panel">
+          <div class="donantes-toolbar">
+            <div>
+              <h3>
+                <i class="bi bi-people-fill"></i> Directorio de Donantes
+                <span class="contador-pill" id="totalDonantesBadge">0</span>
+              </h3>
+              <p class="card-subtitle">Consulta quiénes han donado y su próxima fecha habilitada (90 días).</p>
+            </div>
+            <div class="donantes-actions">
+              <button type="button" id="btnVerDonantes" class="secundario">
+                <i class="bi bi-eye-fill"></i> Mostrar donantes
+              </button>
+              <button type="button" id="btnRefrescarDonantes" class="secundario" onclick="cargarDonantes(true)" style="display: none;">
+                <i class="bi bi-arrow-clockwise"></i> Refrescar
+              </button>
+            </div>
+          </div>
+
+          <div id="contenedorListaDonantes" style="display: none;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Donante</th>
+                    <th>Grupo</th>
+                    <th>WhatsApp</th>
+                    <th>Donaciones</th>
+                    <th>Próx. Donación</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaDonantes"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 2: SOLICITUDES URGENTES -->
+      <div id="tab-urgentes" class="tab-panel">
+        <div class="section-intro">
+          <strong>Solicitudes urgentes de sangre</strong>
+          <span>Registra requerimientos hospitalarios, márcalos como atendidos o difúndelos por WhatsApp.</span>
+        </div>
+
+        <div id="msgUrgente" class="alerta-feedback"></div>
+
+        <form id="formSolicitudUrgente" class="inline-form-grid">
+          <div class="field">
+            <label for="urgHospital">Hospital solicitante</label>
+            <input type="text" id="urgHospital" placeholder="Ej. Hospital del Niño" required />
+          </div>
+          <div class="field">
+            <label for="urgZona">Zona</label>
+            <input type="text" id="urgZona" placeholder="Ej. Miraflores" required />
+          </div>
+          <div class="field">
+            <label for="urgGrupo">Grupo requerido</label>
+            <select id="urgGrupo" required>
+              <option value="">Grupo</option>
+              <option value="O-">O-</option>
+              <option value="O+">O+</option>
+              <option value="A-">A-</option>
+              <option value="A+">A+</option>
+              <option value="B-">B-</option>
+              <option value="B+">B+</option>
+              <option value="AB-">AB-</option>
+              <option value="AB+">AB+</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="urgUnidades">Unidades req.</label>
+            <input type="number" id="urgUnidades" min="1" value="2" required />
+          </div>
+          <div class="inline-form-actions">
+            <button type="submit">
+              <i class="bi bi-megaphone-fill"></i> Publicar Solicitud Urgente
+            </button>
+          </div>
+        </form>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Hospital / Zona</th>
+                <th>Grupo</th>
+                <th>Req.</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaSolicitudes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 3: HISTORIAL DE DONACIONES + CAMPAÑAS -->
+      <div id="tab-historial" class="tab-panel">
+        <div class="section-intro">
+          <strong>Historial de donaciones y campañas</strong>
+          <span>Cada donante registrado suma +1 unidad al inventario y queda asentado aquí.</span>
+        </div>
+
+        <div id="msgCampana" class="alerta-feedback"></div>
+
+        <h3 class="subbloque-titulo"><i class="bi bi-clock-history"></i> Últimas Donaciones Registradas</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Donante</th>
+                <th>Grupo</th>
+                <th>Aporte</th>
+                <th>Centro</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="tablaDonacionesHist"></tbody>
+          </table>
+        </div>
+
+        <div class="bloque-secundario">
+          <h3 class="subbloque-titulo"><i class="bi bi-calendar-event-fill"></i> Campañas de Donación</h3>
+          <form id="formCampana" class="inline-form-grid">
+            <div class="field">
+              <label for="campTitulo">Nombre de campaña</label>
+              <input type="text" id="campTitulo" placeholder="Ej. Colecta Universitaria" required />
+            </div>
+            <div class="field">
+              <label for="campZona">Zona / Sede</label>
+              <input type="text" id="campZona" placeholder="Ej. Cota Cota" required />
+            </div>
+            <div class="field">
+              <label for="campMeta">Meta (unidades)</label>
+              <input type="number" id="campMeta" min="1" value="30" required />
+            </div>
+            <div class="inline-form-actions">
+              <button type="submit" class="secundario">
+                <i class="bi bi-plus-circle-fill"></i> Crear Campaña
+              </button>
+            </div>
+          </form>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaña</th>
+                  <th>Sede</th>
+                  <th>Meta</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="tablaCampanas"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: AUDITORÍA DE MOVIMIENTOS + PERSONAL -->
+      <div id="tab-auditoria" class="tab-panel">
+        <div class="section-intro">
+          <strong>Auditoría de movimientos y personal</strong>
+          <span>Revisa los cambios realizados en el inventario y los operadores registrados en el sistema.</span>
+        </div>
+
+        <div class="filter-bar">
+          <span class="contador-pill"><i class="bi bi-database-check"></i>&nbsp; Movimientos recientes en stock</span>
+          <button type="button" class="secundario" onclick="cargarAuditoria()">
+            <i class="bi bi-arrow-clockwise"></i> Refrescar Bitácora
+          </button>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Movimiento</th>
+                <th>Grupo</th>
+                <th>Cambio</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="tablaAuditoria"></tbody>
+          </table>
+        </div>
+
+        <div class="bloque-secundario">
+          <h3 class="subbloque-titulo"><i class="bi bi-person-check-fill"></i> Personal Registrado</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Operador</th>
+                  <th>Correo</th>
+                  <th>Rol</th>
+                  <th>Último Acceso</th>
+                </tr>
+              </thead>
+              <tbody id="tablaPersonal"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

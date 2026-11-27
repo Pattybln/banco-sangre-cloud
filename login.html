@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar Sesión · HemoCloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-canvas"></div>
+
+  <main class="auth-shell">
+    <section class="auth-showcase">
+      <span class="eyebrow">HEMOCLOUD · BASE DE DATOS II</span>
+      <h2>Red Hospitalaria y Banco de Sangre Cloud</h2>
+      <p>
+        Inicia sesión para gestionar el inventario sanguíneo en tiempo real, registrar donantes con carnet QR,
+        atender solicitudes urgentes y consultar el historial relacional en Supabase.
+      </p>
+      <ul class="auth-features">
+        <li><i class="bi bi-check-circle-fill"></i> Control de stock por hospital, zona y grupo sanguíneo</li>
+        <li><i class="bi bi-check-circle-fill"></i> Suma automática (+1 unidad) e historial al registrar donantes</li>
+        <li><i class="bi bi-check-circle-fill"></i> Campañas, solicitudes urgentes por WhatsApp y auditoría</li>
+      </ul>
+    </section>
+
+    <section class="auth-card">
+      <div class="auth-card-top">
+        <div class="auth-badge-icon">
+          <i class="bi bi-box-arrow-in-right"></i>
+        </div>
+        <div>
+          <h3>Iniciar Sesión</h3>
+          <span class="sub">Ingresa con tu cuenta clínica para ir al panel</span>
+        </div>
+      </div>
+
+      <div id="msgLogin" class="alerta-feedback"></div>
+
+      <form id="formLogin">
+        <div class="stack-fields">
+          <div class="field">
+            <label for="loginCorreo"><i class="bi bi-envelope-fill"></i> Correo electrónico</label>
+            <input type="email" id="loginCorreo" placeholder="operador@hemocloud.bo" required />
+          </div>
+          <div class="field">
+            <label for="loginClave"><i class="bi bi-key-fill"></i> Contraseña</label>
+            <input type="password" id="loginClave" placeholder="Tu contraseña" required />
+          </div>
+        </div>
+
+        <button type="submit" class="full-btn">
+          <i class="bi bi-shield-check"></i> Ingresar al Sistema
+        </button>
+      </form>
+
+      <hr class="auth-divider" />
+
+      <p class="auth-switch">
+        ¿Aún no tienes cuenta? <a href="registro.html">Crear cuenta nueva</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

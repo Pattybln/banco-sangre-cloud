@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear Cuenta · HemoCloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-canvas"></div>
+
+  <main class="auth-shell">
+    <section class="auth-showcase">
+      <span class="eyebrow">REGISTRO DE PERSONAL · HEMOCLOUD</span>
+      <h2>Crea tu Cuenta Operativa</h2>
+      <p>
+        Registra tu perfil de operador o coordinador clínico para acceder al panel de bancos de sangre
+        y dejar trazabilidad de accesos en la base de datos.
+      </p>
+      <ul class="auth-features">
+        <li><i class="bi bi-check-circle-fill"></i> Registro de usuario en Supabase Auth y personal_acceso</li>
+        <li><i class="bi bi-check-circle-fill"></i> Asignación de rol clínico o de coordinación</li>
+        <li><i class="bi bi-check-circle-fill"></i> Redirección directa a tu inicio de sesión</li>
+      </ul>
+    </section>
+
+    <section class="auth-card">
+      <div class="auth-card-top">
+        <div class="auth-badge-icon">
+          <i class="bi bi-person-plus-fill"></i>
+        </div>
+        <div>
+          <h3>Crear Cuenta</h3>
+          <span class="sub">Completa tus datos para registrarte</span>
+        </div>
+      </div>
+
+      <div id="msgRegistro" class="alerta-feedback"></div>
+
+      <form id="formRegistro">
+        <div class="stack-fields">
+          <div class="field">
+            <label for="regNombre"><i class="bi bi-person-fill"></i> Nombre completo</label>
+            <input type="text" id="regNombre" placeholder="Ej. Dra. Patricia Quiñajo" required />
+          </div>
+          <div class="field">
+            <label for="regRol"><i class="bi bi-briefcase-fill"></i> Rol</label>
+            <select id="regRol" required>
+              <option value="Coordinador de Banco de Sangre">Coordinador de Banco de Sangre</option>
+              <option value="Médico Hemoterapeuta">Médico Hemoterapeuta</option>
+              <option value="Administrador de Red">Administrador de Red</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="regCorreo"><i class="bi bi-envelope-fill"></i> Correo electrónico</label>
+            <input type="email" id="regCorreo" placeholder="operador@hemocloud.bo" required />
+          </div>
+          <div class="field">
+            <label for="regClave"><i class="bi bi-key-fill"></i> Contraseña (mín. 6 caracteres)</label>
+            <input type="password" id="regClave" minlength="6" placeholder="Mínimo 6 caracteres" required />
+          </div>
+        </div>
+
+        <button type="submit" class="full-btn">
+          <i class="bi bi-check2-circle"></i> Registrar Cuenta
+        </button>
+      </form>
+
+      <hr class="auth-divider" />
+
+      <p class="auth-switch">
+        ¿Ya tienes cuenta? <a href="login.html">Iniciar sesión</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+</body>
+</html>
