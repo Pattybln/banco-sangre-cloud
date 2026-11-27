@@ -56,11 +56,36 @@ const tablaAuditoria = document.getElementById("tablaAuditoria");
 const tablaPersonal = document.getElementById("tablaPersonal");
 
 const GRUPOS_VALIDOS = ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"];
+const REGEX_NOMBRE_PERSONA = /^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s'.-]{3,80}$/;
+const REGEX_TEXTO_LUGAR = /^[A-Za-zÁÉÍÓÚáéíóúÑñÜü0-9\s.,#°()\/-]{3,100}$/;
+const REGEX_TELEFONO = /^\+?\d{7,15}$/;
 
 let stockActual = [];
+let donantesActuales = [];
 let listaDonantesVisible = false;
 let conteoDonacionesHist = 0;
 let conteoCampanas = 0;
+
+function escaparHtml(valor) {
+  return String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "").trim().replace(/\s+/g, " ");
+}
+
+function validarEnteroEnRango(raw, min, max) {
+  const limpio = String(raw ?? "").trim();
+  if (!/^\d+$/.test(limpio)) return null;
+  const num = Number(limpio);
+  if (!Number.isInteger(num) || num < min || num > max) return null;
+  return num;
+}
 
 function obtenerInsigniaPorTotal(total) {
   const n = Number(total || 0);
@@ -94,12 +119,16 @@ function mostrarMensaje(contenedorId, texto, tipo = "error") {
   if (!caja) {
     caja = document.createElement("div");
     caja.id = contenedorId;
-    const destino = contenedorId === "msgStock" ? formStock : formDonante;
+    const destino =
+      contenedorId === "msgStock" ? formStock :
+      contenedorId === "msgUrgente" ? formSolicitudUrgente :
+      contenedorId === "msgCampana" ? formCampana :
+      formDonante;
     destino.parentNode.insertBefore(caja, destino);
   }
 
   caja.className = `alerta-feedback ${tipo === "ok" ? "alerta-ok" : "alerta-error"}`;
-  caja.innerHTML = `<i class="bi ${tipo === "ok" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill"}"></i> <span>${texto}</span>`;
+  caja.innerHTML = `<i class="bi ${tipo === "ok" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill"}"></i> <span>${escaparHtml(texto)}</span>`;
   caja.style.display = "flex";
 
   clearTimeout(caja._timer);
@@ -171,7 +200,7 @@ async function cargarStock() {
     const claseBarra = Number(item.unidades) >= 5 ? "ok" : "";
 
     const botonEliminar = puedeEliminarStock
-      ? `<button type="button" class="peligro" onclick="eliminarStock(${item.id})">
+      ? `<button type="button" class="peligro" onclick="eliminarStock(${Number(item.id)})">
            <i class="bi bi-trash3-fill"></i> Dar de baja
          </button>`
       : `<button type="button" class="peligro" style="opacity:0.6;" title="Solo Administrador de Red" onclick="avisoSinPermisoEliminar()">
@@ -180,18 +209,18 @@ async function cargarStock() {
 
     const fila = document.createElement("tr");
     fila.innerHTML = `
-      <td><span class="contador-pill">#${idx + 1}</span> <strong>${item.centro_nombre}</strong></td>
-      <td>${item.ciudad_o_zona}${item.campana_activa ? " · <span style='color:#be123c;font-weight:600;'>" + item.campana_activa + "</span>" : ""}</td>
-      <td><span class="badge">${item.grupo_sanguineo}</span></td>
+      <td><span class="contador-pill">#${idx + 1}</span> <strong>${escaparHtml(item.centro_nombre)}</strong></td>
+      <td>${escaparHtml(item.ciudad_o_zona)}${item.campana_activa ? " · <span style='color:#be123c;font-weight:600;'>" + escaparHtml(item.campana_activa) + "</span>" : ""}</td>
+      <td><span class="badge">${escaparHtml(item.grupo_sanguineo)}</span></td>
       <td>
-        <strong>${item.unidades}</strong> unid.
+        <strong>${Number(item.unidades)}</strong> unid.
         <div class="stock-meter">
           <div class="stock-meter-fill ${claseBarra}" style="width:${porcentaje}%"></div>
         </div>
       </td>
       <td>
         <div class="acciones-grupo">
-          <button type="button" class="secundario" onclick="prepararEdicionPorId(${item.id})">
+          <button type="button" class="secundario" onclick="prepararEdicionPorId(${Number(item.id)})">
             <i class="bi bi-pencil-square"></i> Editar
           </button>
           ${botonEliminar}
@@ -228,9 +257,9 @@ window.cargarDonantes = async function cargarDonantes(forzarRender = false) {
     return;
   }
 
-  const registros = Array.isArray(data) ? data : [];
+  donantesActuales = Array.isArray(data) ? data : [];
   if (totalDonantesBadge) {
-    totalDonantesBadge.textContent = registros.length;
+    totalDonantesBadge.textContent = donantesActuales.length;
   }
 
   if (!listaDonantesVisible && !forzarRender) {
@@ -238,7 +267,7 @@ window.cargarDonantes = async function cargarDonantes(forzarRender = false) {
   }
 
   tablaDonantes.innerHTML = "";
-  if (registros.length === 0) {
+  if (donantesActuales.length === 0) {
     tablaDonantes.innerHTML = `
       <tr>
         <td colspan="5" style="text-align:center; color:#64748b; padding:1.5rem;">
@@ -249,18 +278,18 @@ window.cargarDonantes = async function cargarDonantes(forzarRender = false) {
     return;
   }
 
-  registros.forEach((donante, idx) => {
+  donantesActuales.forEach((donante, idx) => {
     const insigniaMostrar = obtenerInsigniaPorTotal(donante.total_donaciones);
     const fila = document.createElement("tr");
     fila.innerHTML = `
-      <td><strong>#${idx + 1}</strong> · ${donante.nombre_completo}</td>
-      <td><span class="badge">${donante.grupo_sanguineo}</span></td>
-      <td>${donante.telefono_whatsapp}</td>
+      <td><strong>#${idx + 1}</strong> · ${escaparHtml(donante.nombre_completo)}</td>
+      <td><span class="badge">${escaparHtml(donante.grupo_sanguineo)}</span></td>
+      <td>${escaparHtml(donante.telefono_whatsapp)}</td>
       <td>
-        <strong>${donante.total_donaciones}</strong> don.
-        <div><span class="insignia-tag">${insigniaMostrar}</span></div>
+        <strong>${Number(donante.total_donaciones)}</strong> don.
+        <div><span class="insignia-tag">${escaparHtml(insigniaMostrar)}</span></div>
       </td>
-      <td class="nowrap-col">${donante.proxima_fecha_disponible || "-"}</td>
+      <td class="nowrap-col">${escaparHtml(donante.proxima_fecha_disponible || "-")}</td>
     `;
     tablaDonantes.appendChild(fila);
   });
@@ -279,24 +308,55 @@ btnVerDonantes.addEventListener("click", async () => {
   }
 });
 
+// ==================== VALIDACIÓN Y GUARDADO DE STOCK ====================
 formStock.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const id = document.getElementById("stockId").value;
-  const centroNombre = document.getElementById("centroNombre").value.trim();
-  const zona = document.getElementById("zona").value.trim();
+  const id = document.getElementById("stockId").value.trim();
+  const centroNombre = normalizarTexto(document.getElementById("centroNombre").value);
+  const zona = normalizarTexto(document.getElementById("zona").value);
   const grupo = document.getElementById("grupoStock").value;
-  const unidadesRaw = document.getElementById("unidades").value.trim();
-  const unidades = Number(unidadesRaw);
-  const campana = document.getElementById("campana").value.trim();
+  const unidades = validarEnteroEnRango(document.getElementById("unidades").value, 0, 10000);
+  const campana = normalizarTexto(document.getElementById("campana").value);
 
-  if (centroNombre.length < 3 || zona.length < 3 || !GRUPOS_VALIDOS.includes(grupo)) {
-    mostrarMensaje("msgStock", "Completa los campos requeridos con datos válidos.");
+  if (!REGEX_TEXTO_LUGAR.test(centroNombre)) {
+    mostrarMensaje("msgStock", "El nombre del hospital o centro debe tener entre 3 y 100 caracteres válidos.");
     return;
   }
-  if (unidadesRaw === "" || !Number.isInteger(unidades) || unidades < 0 || unidades > 10000) {
+
+  if (zona.length < 3 || zona.length > 80 || !REGEX_TEXTO_LUGAR.test(zona)) {
+    mostrarMensaje("msgStock", "La ciudad o zona debe tener entre 3 y 80 caracteres válidos.");
+    return;
+  }
+
+  if (!GRUPOS_VALIDOS.includes(grupo)) {
+    mostrarMensaje("msgStock", "Selecciona un grupo sanguíneo válido.");
+    return;
+  }
+
+  if (unidades === null) {
     mostrarMensaje("msgStock", "Las unidades deben ser un número entero entre 0 y 10,000.");
     return;
+  }
+
+  if (campana && (campana.length < 3 || campana.length > 100)) {
+    mostrarMensaje("msgStock", "El nombre de la campaña debe tener entre 3 y 100 caracteres.");
+    return;
+  }
+
+  if (!id) {
+    const yaExiste = stockActual.some(
+      (s) =>
+        normalizarTexto(s.centro_nombre).toLowerCase() === centroNombre.toLowerCase() &&
+        s.grupo_sanguineo === grupo
+    );
+    if (yaExiste) {
+      mostrarMensaje(
+        "msgStock",
+        `Ya existe un registro activo para ${centroNombre} con grupo ${grupo}. Usa "Editar" para actualizar sus unidades.`
+      );
+      return;
+    }
   }
 
   const payload = {
@@ -366,7 +426,6 @@ function resetearFormularioStock() {
   document.getElementById("btnCancelarEdicion").style.display = "none";
 }
 
-// Eliminación lógica: marca activo = false sin borrar físicamente el registro
 window.eliminarStock = async function eliminarStock(id) {
   if (!puedeEliminarStock) {
     avisoSinPermisoEliminar();
@@ -446,13 +505,60 @@ async function incrementarStockPorGrupo(grupo) {
   return creado;
 }
 
+// ==================== VALIDACIÓN Y REGISTRO DE DONANTE ====================
 formDonante.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const nombre = document.getElementById("nombreDonante").value.trim();
+  const nombre = normalizarTexto(document.getElementById("nombreDonante").value);
   const grupo = document.getElementById("grupoDonante").value;
-  const telefono = document.getElementById("telDonante").value.replace(/\s+/g, "");
-  const totalDonaciones = Number(document.getElementById("donacionesPrevias").value);
+  const telefono = document.getElementById("telDonante").value.replace(/[\s()-]/g, "");
+  const totalDonaciones = validarEnteroEnRango(
+    document.getElementById("donacionesPrevias").value,
+    0,
+    200
+  );
+
+  if (!REGEX_NOMBRE_PERSONA.test(nombre)) {
+    mostrarMensaje(
+      "msgDonante",
+      "El nombre del donante debe tener entre 3 y 80 caracteres y contener solo letras y espacios."
+    );
+    return;
+  }
+
+  if (!GRUPOS_VALIDOS.includes(grupo)) {
+    mostrarMensaje("msgDonante", "Selecciona un grupo sanguíneo válido para el donante.");
+    return;
+  }
+
+  if (!REGEX_TELEFONO.test(telefono)) {
+    mostrarMensaje(
+      "msgDonante",
+      "Ingresa un número de WhatsApp válido (7 a 15 dígitos, opcionalmente con + al inicio)."
+    );
+    return;
+  }
+
+  if (totalDonaciones === null) {
+    mostrarMensaje(
+      "msgDonante",
+      "El total de donaciones previas debe ser un número entero entre 0 y 200."
+    );
+    return;
+  }
+
+  const donanteDuplicado = donantesActuales.some(
+    (d) =>
+      normalizarTexto(d.nombre_completo).toLowerCase() === nombre.toLowerCase() &&
+      String(d.telefono_whatsapp || "").replace(/[\s()-]/g, "") === telefono
+  );
+  if (donanteDuplicado) {
+    mostrarMensaje(
+      "msgDonante",
+      "Este donante ya está registrado con el mismo nombre y teléfono."
+    );
+    return;
+  }
 
   const hoy = new Date();
   const proxima = new Date(hoy);
@@ -507,6 +613,8 @@ formDonante.addEventListener("submit", async (e) => {
     await cargarDonantes(listaDonantesVisible);
     await cargarDonacionesHistorial();
 
+    formDonante.reset();
+
     mostrarMensaje(
       "msgDonante",
       `Donante guardado y stock ${grupo} actualizado (+1 unid. en ${stockAct.centro_nombre}: ${stockAct.unidades} unid.).`,
@@ -517,10 +625,10 @@ formDonante.addEventListener("submit", async (e) => {
   }
 
   document.getElementById("carnetResultado").innerHTML = `
-    <strong>Carnet Digital #${data.id}</strong> — ${data.nombre_completo}<br/>
-    Grupo: <span class="badge">${data.grupo_sanguineo}</span> · Total: <strong>${data.total_donaciones}</strong><br/>
-    Insignia: <strong>${insignia}</strong><br/>
-    Próxima fecha disponible: <strong>${data.proxima_fecha_disponible}</strong>
+    <strong>Carnet Digital #${Number(data.id)}</strong> — ${escaparHtml(data.nombre_completo)}<br/>
+    Grupo: <span class="badge">${escaparHtml(data.grupo_sanguineo)}</span> · Total: <strong>${Number(data.total_donaciones)}</strong><br/>
+    Insignia: <strong>${escaparHtml(insignia)}</strong><br/>
+    Próxima fecha disponible: <strong>${escaparHtml(data.proxima_fecha_disponible)}</strong>
   `;
 
   const qrBox = document.getElementById("qrBox");
@@ -534,6 +642,7 @@ formDonante.addEventListener("submit", async (e) => {
   }
 });
 
+// ==================== SOLICITUDES URGENTES ====================
 async function cargarSolicitudes() {
   const { data, error } = await db
     .from("solicitudes_urgentes")
@@ -559,14 +668,14 @@ async function cargarSolicitudes() {
     );
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${s.hospital_solicitante}</strong> · ${s.zona}</td>
-      <td><span class="badge">${s.grupo_sanguineo}</span></td>
-      <td><strong>${s.unidades_requeridas}</strong></td>
-      <td><span class="${s.estado === "Abierta" ? "estado-abierta" : "estado-atendida"}">${s.estado}</span></td>
+      <td><strong>${escaparHtml(s.hospital_solicitante)}</strong> · ${escaparHtml(s.zona)}</td>
+      <td><span class="badge">${escaparHtml(s.grupo_sanguineo)}</span></td>
+      <td><strong>${Number(s.unidades_requeridas)}</strong></td>
+      <td><span class="${s.estado === "Abierta" ? "estado-abierta" : "estado-atendida"}">${escaparHtml(s.estado)}</span></td>
       <td>
         <div class="acciones-grupo">
           ${s.estado === "Abierta"
-            ? `<button type="button" class="secundario" onclick="marcarSolicitudAtendida(${s.id})"><i class="bi bi-check2"></i> Atender</button>`
+            ? `<button type="button" class="secundario" onclick="marcarSolicitudAtendida(${Number(s.id)})"><i class="bi bi-check2"></i> Atender</button>`
             : ""}
           <a href="https://wa.me/?text=${msg}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; display:inline-flex;">
             <button type="button" class="whatsapp"><i class="bi bi-whatsapp"></i> Avisar</button>
@@ -580,10 +689,30 @@ async function cargarSolicitudes() {
 
 formSolicitudUrgente.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const hospital = document.getElementById("urgHospital").value.trim();
-  const zona = document.getElementById("urgZona").value.trim();
+  const hospital = normalizarTexto(document.getElementById("urgHospital").value);
+  const zona = normalizarTexto(document.getElementById("urgZona").value);
   const grupo = document.getElementById("urgGrupo").value;
-  const unidades = Number(document.getElementById("urgUnidades").value);
+  const unidades = validarEnteroEnRango(document.getElementById("urgUnidades").value, 1, 500);
+
+  if (!REGEX_TEXTO_LUGAR.test(hospital)) {
+    mostrarMensaje("msgUrgente", "El hospital solicitante debe tener entre 3 y 100 caracteres válidos.");
+    return;
+  }
+
+  if (zona.length < 3 || zona.length > 80 || !REGEX_TEXTO_LUGAR.test(zona)) {
+    mostrarMensaje("msgUrgente", "La zona debe tener entre 3 y 80 caracteres válidos.");
+    return;
+  }
+
+  if (!GRUPOS_VALIDOS.includes(grupo)) {
+    mostrarMensaje("msgUrgente", "Selecciona un grupo sanguíneo válido.");
+    return;
+  }
+
+  if (unidades === null) {
+    mostrarMensaje("msgUrgente", "Las unidades requeridas deben ser un número entero entre 1 y 500.");
+    return;
+  }
 
   const { error } = await db.from("solicitudes_urgentes").insert([{
     hospital_solicitante: hospital,
@@ -612,6 +741,7 @@ window.marcarSolicitudAtendida = async function marcarSolicitudAtendida(id) {
   if (!error) cargarSolicitudes();
 };
 
+// ==================== HISTORIAL Y CAMPAÑAS ====================
 async function cargarDonacionesHistorial() {
   const { data, error } = await db
     .from("donaciones")
@@ -633,11 +763,11 @@ async function cargarDonacionesHistorial() {
   rows.forEach((d) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${d.nombre_donante}</strong></td>
-      <td><span class="badge">${d.grupo_sanguineo}</span></td>
-      <td><strong>+${d.unidades_aportadas}</strong> unid.</td>
-      <td>${d.centro_destino}</td>
-      <td class="nowrap-col">${d.fecha_donacion}</td>
+      <td><strong>${escaparHtml(d.nombre_donante)}</strong></td>
+      <td><span class="badge">${escaparHtml(d.grupo_sanguineo)}</span></td>
+      <td><strong>+${Number(d.unidades_aportadas)}</strong> unid.</td>
+      <td>${escaparHtml(d.centro_destino)}</td>
+      <td class="nowrap-col">${escaparHtml(d.fecha_donacion)}</td>
     `;
     tablaDonacionesHist.appendChild(tr);
   });
@@ -664,10 +794,10 @@ async function cargarCampanas() {
   rows.forEach((c) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${c.titulo}</strong></td>
-      <td>${c.zona_sede}</td>
-      <td><strong>${c.meta_unidades}</strong> unid.</td>
-      <td><span class="insignia-tag">${c.estado}</span></td>
+      <td><strong>${escaparHtml(c.titulo)}</strong></td>
+      <td>${escaparHtml(c.zona_sede)}</td>
+      <td><strong>${Number(c.meta_unidades)}</strong> unid.</td>
+      <td><span class="insignia-tag">${escaparHtml(c.estado)}</span></td>
     `;
     tablaCampanas.appendChild(tr);
   });
@@ -683,9 +813,24 @@ formCampana.addEventListener("submit", async (e) => {
     return;
   }
 
-  const titulo = document.getElementById("campTitulo").value.trim();
-  const zona = document.getElementById("campZona").value.trim();
-  const meta = Number(document.getElementById("campMeta").value);
+  const titulo = normalizarTexto(document.getElementById("campTitulo").value);
+  const zona = normalizarTexto(document.getElementById("campZona").value);
+  const meta = validarEnteroEnRango(document.getElementById("campMeta").value, 1, 10000);
+
+  if (titulo.length < 4 || titulo.length > 120) {
+    mostrarMensaje("msgCampana", "El título de la campaña debe tener entre 4 y 120 caracteres.");
+    return;
+  }
+
+  if (zona.length < 3 || zona.length > 80 || !REGEX_TEXTO_LUGAR.test(zona)) {
+    mostrarMensaje("msgCampana", "La zona o sede debe tener entre 3 y 80 caracteres válidos.");
+    return;
+  }
+
+  if (meta === null) {
+    mostrarMensaje("msgCampana", "La meta de unidades debe ser un número entero entre 1 y 10,000.");
+    return;
+  }
 
   const { error } = await db.from("campanas_donacion").insert([{
     titulo,
@@ -705,6 +850,7 @@ formCampana.addEventListener("submit", async (e) => {
   cargarCampanas();
 });
 
+// ==================== AUDITORÍA Y PERSONAL ====================
 async function cargarAuditoria() {
   const { data, error } = await db
     .from("auditoria_movimientos")
@@ -723,12 +869,13 @@ async function cargarAuditoria() {
   }
 
   rows.forEach((a) => {
+    const cambio = Number(a.cambio_unidades || 0);
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${a.tipo_movimiento}</strong></td>
-      <td><span class="badge">${a.grupo_sanguineo}</span></td>
-      <td><strong>${a.cambio_unidades > 0 ? "+" + a.cambio_unidades : a.cambio_unidades}</strong></td>
-      <td>${a.detalle}</td>
+      <td><strong>${escaparHtml(a.tipo_movimiento)}</strong></td>
+      <td><span class="badge">${escaparHtml(a.grupo_sanguineo)}</span></td>
+      <td><strong>${cambio > 0 ? "+" + cambio : cambio}</strong></td>
+      <td>${escaparHtml(a.detalle)}</td>
     `;
     tablaAuditoria.appendChild(tr);
   });
@@ -755,10 +902,10 @@ async function cargarPersonal() {
     const fechaFmt = p.ultimo_acceso ? new Date(p.ultimo_acceso).toLocaleString() : "-";
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>#${idx + 1}</strong> · ${p.nombre_completo}</td>
-      <td>${p.correo}</td>
-      <td><span class="insignia-tag">${p.rol}</span></td>
-      <td class="nowrap-col">${fechaFmt}</td>
+      <td><strong>#${idx + 1}</strong> · ${escaparHtml(p.nombre_completo)}</td>
+      <td>${escaparHtml(p.correo)}</td>
+      <td><span class="insignia-tag">${escaparHtml(p.rol)}</span></td>
+      <td class="nowrap-col">${escaparHtml(fechaFmt)}</td>
     `;
     tablaPersonal.appendChild(tr);
   });
